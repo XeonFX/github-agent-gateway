@@ -858,7 +858,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": true
+                "additionalProperties": false,
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "body": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": ["open", "closed"]
+                  },
+                  "base": {
+                    "type": "string"
+                  },
+                  "maintainerCanModify": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -1221,7 +1241,37 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": true
+                "additionalProperties": false,
+                "required": ["title"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "assignees": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        { "type": "string" },
+                        { "type": "number" }
+                      ]
+                    }
+                  },
+                  "milestone": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "nullable": true
+                  }
+                }
               }
             }
           }
@@ -1304,7 +1354,44 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": true
+                "additionalProperties": false,
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "assignees": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        { "type": "string" },
+                        { "type": "number" }
+                      ]
+                    }
+                  },
+                  "milestone": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "nullable": true
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": ["open", "closed"]
+                  },
+                  "stateReason": {
+                    "type": "string",
+                    "enum": ["completed", "not_planned", "reopened"]
+                  }
+                }
               }
             }
           }
