@@ -1,0 +1,101 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+.wrangler/
+worker-configuration.d.ts
+
+# Cloudflare local state
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/state/
+.wrangler/tmp/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# TypeScript
+*.tsbuildinfo
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+.local/
+.d1/
+
+# IDEs and editors
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Temporary files
+tmp/
+temp/
+.cache/
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Certificates and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# GitHub App credentials
+github-app-private-key*
+private-key*
+credentials.json
+secrets.json
+
+# Package manager caches
+.npm/
+.pnpm-store/
+.yarn/
+.yarn-cache/
+
+# Runtime artifacts
+*.pid
+*.pid.lock
+
+# Optional local configuration
+wrangler.local.json
+wrangler.local.jsonc
