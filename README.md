@@ -22,7 +22,8 @@ It works with ChatGPT Custom Actions, custom coding agents, bots, CI services, o
 - Sensitive-file and workflow-file policy checks
 - Destructive, merge and administration features disabled by default
 - Discoverable runtime policy at `/v1/capabilities`
-- Dynamic OpenAPI document at `/openapi.json`
+- Full dynamic OpenAPI document at `/openapi.json`
+- Curated 30-operation Custom GPT schema at `/openapi.chatgpt.json`
 
 ## What is supported
 
@@ -363,7 +364,7 @@ Any HTTP client can use the gateway with `Authorization: Bearer <ACTION_API_KEY>
 4. Import the schema from:
 
 ```text
-https://github-agent-gateway.your-subdomain.workers.dev/openapi.json
+https://github-agent-gateway.your-subdomain.workers.dev/openapi.chatgpt.json
 ```
 
 5. Configure authentication as **API key**.
@@ -372,7 +373,7 @@ https://github-agent-gateway.your-subdomain.workers.dev/openapi.json
 8. Paste the contents of `examples/custom-gpt-instructions.md` into the GPT instructions.
 9. Keep the GPT private while testing.
 
-The `/openapi.json` response automatically uses the Worker request origin, so you do not need to edit the server URL after deployment.
+The `/openapi.chatgpt.json` response contains exactly 30 curated operations to fit the Custom GPT Actions limit and automatically uses the Worker request origin. The complete gateway schema remains available at `/openapi.json` for clients without that limit.
 
 ## Safe code-change workflow
 
@@ -472,7 +473,7 @@ These phrases are not a substitute for user approval; they make accidental or ma
 
 ## API surface
 
-The complete Custom Action schema is in `openapi.action.json` and is served dynamically at `/openapi.json`.
+The complete gateway schema is in `openapi.action.json` and is served dynamically at `/openapi.json`. A curated Custom GPT subset with exactly 30 operations is served at `/openapi.chatgpt.json`. The subset intentionally excludes destructive, merge and administrative operations while retaining repository reading, change plans, pull requests, issues and GitHub Actions diagnostics.
 
 Main route groups:
 

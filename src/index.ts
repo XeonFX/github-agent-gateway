@@ -5,6 +5,7 @@ import { AppError, GitHubApiError } from "./errors";
 import { constantTimeEqual } from "./utils";
 import { requireSecrets } from "./config";
 import openapiBase from "../openapi.action.json";
+import { createChatGptOpenApiDocument, withServer, type OpenApiDocument } from "./openapi";
 import { repositoryRoutes } from "./routes/repositories";
 import { changePlanRoutes } from "./routes/change-plans";
 import { pullRoutes } from "./routes/pulls";
@@ -27,7 +28,11 @@ app.use("*", async (c, next) => {
 app.get("/health", (c) => c.json({ ok: true, service: "github-agent-gateway", version: "1.2.0" }));
 app.get("/openapi.json", (c) => {
   const origin = new URL(c.req.url).origin;
-  return c.json({ ...openapiBase, servers: [{ url: origin }] });
+  return c.json(withServer(openapiBase as OpenApiDocument, origin));
+});
+app.get("/openapi.chatgpt.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json(createChatGptOpenApiDocument(openapiBase as OpenApiDocument, origin));
 });
 
 app.use("/v1/*", async (c, next) => {
