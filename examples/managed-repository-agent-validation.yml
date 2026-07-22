@@ -1,0 +1,53 @@
+name: Agent validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to validate
+        required: true
+        type: string
+      preset:
+        description: Validation preset
+        required: true
+        type: choice
+        options:
+          - build
+          - test
+          - lint
+          - e2e
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-validation-${{ inputs.ref }}-${{ inputs.preset }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - if: inputs.preset == 'build'
+        run: npm run build
+
+      - if: inputs.preset == 'test'
+        run: npm test
+
+      - if: inputs.preset == 'lint'
+        run: npm run lint
+
+      - if: inputs.preset == 'e2e'
+        run: npm run test:e2e

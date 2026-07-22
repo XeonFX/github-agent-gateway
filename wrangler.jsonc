@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "github-agent-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "github-agent-gateway",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "ALLOWED_REPOSITORIES": "XeonFX/Peerly,XeonFX/HeyHubs",
+    "BRANCH_PREFIX": "chatgpt/",
+    "PLAN_TTL_MINUTES": "30",
+    "MAX_PLAN_FILES": "12",
+    "MAX_PLAN_BYTES": "524288",
+    "MAX_DIFF_BYTES": "196608",
+    "ENABLE_MERGE": "false",
+    "ENABLE_DESTRUCTIVE_OPERATIONS": "false",
+    "ENABLE_ADMIN_OPERATIONS": "false",
+    "ENABLE_WORKFLOW_WRITE": "true",
+    "ENABLE_WORKFLOW_FILE_CHANGES": "false",
+    "ALLOWED_WORKFLOWS": "agent-validation.yml"
+  }
+}
