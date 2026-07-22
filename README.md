@@ -10,7 +10,7 @@ It works with ChatGPT Custom Actions, custom coding agents, bots, CI services, o
 
 - Cloudflare Workers + TypeScript + Hono
 - GitHub App authentication with one-hour installation tokens
-- Exact repository allowlist
+- GitHub App installation selection as the single repository access boundary
 - Immutable D1-backed change plans
 - Unified diff preview before every code-writing operation
 - Atomic multi-file commits using Git blobs, trees, commits and refs
@@ -28,7 +28,7 @@ It works with ChatGPT Custom Actions, custom coding agents, bots, CI services, o
 
 | Area | Operations |
 |---|---|
-| Repository | List allowlisted repositories, metadata, contents, recursive tree, settings update when enabled |
+| Repository | Discover installation-accessible repositories, metadata, contents, recursive tree, settings update when enabled |
 | Git | Branch list/create/delete, safe follow-up commits, commit list/read, ref comparison, tags |
 | Code changes | Immutable preview, textual/binary change summary, atomic commit, stale-plan protection |
 | Pull requests | List, read, create, edit, comment, reviewers, reviews, optional merge |
@@ -115,7 +115,19 @@ After creating the app:
 4. Select **Only select repositories**.
 5. Choose the repositories this gateway may manage.
 
-You may optionally note the installation ID from the installation URL. It is safe to omit it because the Worker can resolve the installation from each repository.
+You may optionally note the installation ID from the installation URL. Leave it unset to discover every active installation owned by this GitHub App; set it to restrict the gateway to one installation. Repository names are never stored in Worker configuration.
+
+### Repository access model
+
+There is no `ALLOWED_REPOSITORIES` variable. GitHub App installation selection is the source of truth:
+
+- **Only select repositories** is recommended. Every selected repository becomes manageable through the gateway.
+- **All repositories** intentionally grants the gateway access to every current repository in that account and repositories created later.
+- Leaving `GITHUB_INSTALLATION_ID` empty aggregates repositories from all active installations owned by the app.
+- Setting `GITHUB_INSTALLATION_ID` limits discovery and requests to one installation. This is recommended when the app is installed on multiple accounts but a deployment should manage only one.
+- Repository selection changes are picked up without redeploying. Successful lookups are cached in Worker memory for up to 30 seconds.
+
+`GET /v1/capabilities` reports the access mode but deliberately omits repository names. Authenticated clients can obtain the current selection from `GET /v1/repositories`. Every repository request resolves the app installation and verifies membership in `GET /installation/repositories` before using an installation token.
 
 ## 2. Install the project
 
@@ -185,13 +197,12 @@ Apply it to Cloudflare:
 npm run db:migrate:remote
 ```
 
-## 4. Configure repository and branch policy
+## 4. Configure branch and feature policy
 
 Edit the non-secret variables in `wrangler.jsonc`:
 
 ```jsonc
 "vars": {
-  "ALLOWED_REPOSITORIES": "XeonFX/Peerly,XeonFX/HeyHubs,XeonFX/github-agent-gateway",
   "BRANCH_WRITE_POLICY": "unrestricted",
   "WRITABLE_BRANCH_PREFIXES": "agent/",
   "PROTECTED_BRANCHES": "main,master,develop,development,production,release",
@@ -276,7 +287,7 @@ Public health endpoint:
 curl http://localhost:8787/health
 ```
 
-Authenticated capability discovery and repository list:
+Authenticated capability discovery and dynamic installation repository list:
 
 ```bash
 curl \
@@ -342,7 +353,7 @@ Keep workflow permissions minimal. Do not expose production secrets to validatio
 
 ## 9. Connect a client
 
-Any HTTP client can use the gateway with `Authorization: Bearer <ACTION_API_KEY>`. Clients should call `GET /v1/capabilities` before write operations instead of assuming branch names or enabled features.
+Any HTTP client can use the gateway with `Authorization: Bearer <ACTION_API_KEY>`. Clients should call `GET /v1/capabilities` before write operations instead of assuming branch names or enabled features. Repository names are returned only by authenticated `GET /v1/repositories`, not by the capabilities response.
 
 ### ChatGPT Custom Action
 
@@ -487,13 +498,11 @@ GET/PUT/DELETE /v1/repos/{owner}/{repository}/collaborators
 
 ## Security model
 
-### Repository allowlist
-
-Every repository route calls the server-side allowlist. A model cannot access a repository just by changing action arguments.
-
 ### GitHub App installation scope
 
-Install the app only on selected repositories. The GitHub App installation scope is a second independent boundary in addition to `ALLOWED_REPOSITORIES`.
+The GitHub App installation is the authoritative repository access boundary. Install it with **Only select repositories**. `GET /v1/repositories` discovers those repositories from GitHub, and every repository request verifies that the requested repository belongs to the resolved installation.
+
+Add or remove repository access in **GitHub → Settings → Applications → Installed GitHub Apps → Configure**. The gateway picks up the change without a code change, redeploy, or repository-name secret.
 
 ### No long-lived GitHub personal token
 
@@ -547,7 +556,7 @@ The Custom GPT API key and Cloudflare `ACTION_API_KEY` secret do not match, or a
 
 ### `404 Not Found` from GitHub installation lookup
 
-The GitHub App is not installed on that repository, or the repository name in `ALLOWED_REPOSITORIES` is wrong.
+The GitHub App is not installed for that repository, the repository is not selected in the installation, or `GITHUB_INSTALLATION_ID` points to a different installation.
 
 ### `403 Resource not accessible by integration`
 
@@ -590,7 +599,7 @@ Set `ENABLE_ADMIN_OPERATIONS=true`, grant the GitHub App **Administration** perm
 ## Production checklist
 
 - [ ] GitHub App installed only on intended repositories
-- [ ] Exact `ALLOWED_REPOSITORIES`
+- [ ] GitHub App uses **Only select repositories** and contains exactly the intended repositories
 - [ ] Long random `ACTION_API_KEY`
 - [ ] Worker secrets configured
 - [ ] D1 migrations applied remotely

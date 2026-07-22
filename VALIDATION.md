@@ -1,16 +1,18 @@
 # Validation report
 
-Validation performed for version 1.1.0:
+Validation performed for version 1.2.0:
 
-- TypeScript source type-checked against local interface stubs for Hono, Zod, Cloudflare D1, Node crypto and Vitest.
-- The new branch policy was executed in a runtime smoke test covering prefixed mode, unrestricted mode, protected branches and default-branch blocking.
-- All 56 authenticated HTTP operations match the operations in `openapi.action.json`.
-- Every OpenAPI path placeholder has a corresponding required path parameter.
-- All OpenAPI `operationId` values are unique.
-- `package.json`, `tsconfig.json`, `wrangler.jsonc` and `openapi.action.json` parse successfully.
-- The D1 migration executes successfully in an empty SQLite database.
-- Both GitHub Actions workflow files parse successfully as YAML.
-- The detailed Cloudflare deployment guide and vendor-neutral client instructions are included.
+- TypeScript syntax transpilation passed for every file under `src/` and `test/`.
+- The GitHub installation discovery client and its new tests passed a strict TypeScript check using local interface stubs for Cloudflare, Node and Vitest types.
+- Runtime smoke checks passed for:
+  - listing repositories from a fixed installation;
+  - rejecting a repository routed through a different fixed installation;
+  - converting a missing GitHub App installation lookup into `repository_not_accessible` instead of falling back to public repository access.
+- The Vitest suite now covers fixed-installation discovery, all-installation discovery, selected-repository membership, fixed-installation mismatch and missing-installation rejection.
+- `openapi.action.json` contains 56 operations with 56 unique `operationId` values.
+- `package.json` and `openapi.action.json` parse successfully.
+- No D1 migration is required for this change.
+- The patch was generated from the current `feat/branchprotection` tree and verified with `git apply --check` against a clean copy of that baseline.
 
 ## Check not completed in the generation environment
 

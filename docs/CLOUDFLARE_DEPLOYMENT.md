@@ -4,28 +4,30 @@ This guide deploys GitHub Agent Gateway from the `XeonFX/github-agent-gateway` r
 
 The gateway is vendor-neutral. ChatGPT Custom Actions are one supported client; any Bearer-authenticated HTTP/OpenAPI client can use it.
 
-## 1. Apply and push the branch-policy update
+## 1. Apply this patch to `feat/branchprotection`
 
-Apply the supplied patch from the repository root:
+From your repository root:
 
 ```bash
-git apply github-agent-gateway-universal-branches.patch
+git switch feat/branchprotection
+git pull --ff-only origin feat/branchprotection
+git apply --check github-agent-gateway-installation-discovery.patch
+git apply github-agent-gateway-installation-discovery.patch
 npm install
 npm run check
+```
+
+Review and commit the result:
+
+```bash
+git diff --stat
+git diff
 git add .
-git commit -m "feat: make branch policy vendor-neutral and configurable"
-git push origin main
+git commit -m "feat: use GitHub App installations for repository access"
+git push origin feat/branchprotection
 ```
 
-The recommended personal configuration in `wrangler.jsonc` is:
-
-```jsonc
-"BRANCH_WRITE_POLICY": "unrestricted",
-"WRITABLE_BRANCH_PREFIXES": "agent/",
-"PROTECTED_BRANCHES": "main,master,develop,development,production,release"
-```
-
-This permits clients to choose names such as `feature/...`, `fix/...`, `refactor/...`, or `agent/...`, while the gateway still rejects the configured protected branches and the repository's actual default branch.
+This update removes `ALLOWED_REPOSITORIES`. GitHub App installation repository selection becomes the sole repository access boundary. No D1 migration is required.
 
 ## 2. Create the GitHub App
 
@@ -61,7 +63,9 @@ After creation:
 2. Generate and download a private key (`.pem`).
 3. Select **Install App**.
 4. Install it on **Only select repositories**.
-5. Select `Peerly`, `HeyHubs`, and `github-agent-gateway` if the gateway should manage itself.
+5. Select only the repositories the gateway should manage. This GitHub installation selection is the complete repository allowlist; do not put repository names in `wrangler.jsonc` or Worker secrets.
+
+Avoid **All repositories** unless that is deliberate: it grants the gateway access to all repositories in the installation account, including repositories created later.
 
 Do not commit the PEM file.
 
@@ -138,7 +142,9 @@ In Cloudflare, open the deployed Worker and go to **Settings → Variables & Sec
 | `GITHUB_APP_ID` | Numeric GitHub App ID |
 | `GITHUB_PRIVATE_KEY_BASE64` | One-line base64 form of the PEM |
 
-`GITHUB_INSTALLATION_ID` is optional because the gateway can resolve the installation per repository.
+`GITHUB_INSTALLATION_ID` is optional. Leave it unset to discover all active installations owned by this GitHub App, or set one numeric installation ID to restrict the gateway to that installation. Use a fixed ID when one app is installed on multiple accounts but this Worker should manage only one of them.
+
+Repository additions and removals are read from GitHub and require no Worker configuration change or redeploy. The Worker caches successful installation access checks for at most 30 seconds.
 
 Do not add these only as Workers Builds variables. Build variables are not runtime bindings.
 
@@ -162,7 +168,7 @@ curl "$BASE_URL/health"
 Expected:
 
 ```json
-{"ok":true,"service":"github-agent-gateway","version":"1.1.0"}
+{"ok":true,"service":"github-agent-gateway","version":"1.2.0"}
 ```
 
 Check effective policy:
@@ -178,7 +184,7 @@ Confirm that it reports:
 - `mode: unrestricted`
 - `generatedPrefix: agent/`
 - protected branches
-- all three intended repositories
+- `repositoryAccess.source: github_app_installations`
 - merge, destructive operations, and administration disabled
 
 Check GitHub access:
@@ -189,7 +195,7 @@ curl \
   "$BASE_URL/v1/repositories"
 ```
 
-If a repository returns an error, verify both `ALLOWED_REPOSITORIES` and the GitHub App installation repository selection.
+If a repository is missing, update the GitHub App installation under **Repository access** and verify that `GITHUB_INSTALLATION_ID`, when set, identifies that installation. No redeploy is required for repository selection changes.
 
 ## 7. Test a harmless branch
 

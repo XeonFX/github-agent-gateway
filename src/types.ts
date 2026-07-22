@@ -4,7 +4,6 @@ export interface Env {
   GITHUB_APP_ID: string;
   GITHUB_PRIVATE_KEY_BASE64: string;
   GITHUB_INSTALLATION_ID?: string;
-  ALLOWED_REPOSITORIES: string;
   /** @deprecated Use WRITABLE_BRANCH_PREFIXES. */
   BRANCH_PREFIX?: string;
   BRANCH_WRITE_POLICY?: string;

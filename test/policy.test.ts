@@ -2,14 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   assertNotDefaultBranch,
   assertReadablePath,
-  assertRepositoryAllowed,
   assertSafePath,
   assertWritableBranch
 } from "../src/policy";
 import type { Env } from "../src/types";
 
 const baseEnv = {
-  ALLOWED_REPOSITORIES: "XeonFX/Peerly,XeonFX/HeyHubs",
   BRANCH_WRITE_POLICY: "prefixed",
   WRITABLE_BRANCH_PREFIXES: "agent/,automation/",
   PROTECTED_BRANCHES: "main,master,production",
@@ -17,14 +15,6 @@ const baseEnv = {
 } as Env;
 
 describe("repository policy", () => {
-  it("accepts an allowlisted repository case-insensitively", () => {
-    expect(() => assertRepositoryAllowed(baseEnv, "xeonfx", "peerly")).not.toThrow();
-  });
-
-  it("rejects other repositories", () => {
-    expect(() => assertRepositoryAllowed(baseEnv, "other", "repo")).toThrow(/not allowlisted/);
-  });
-
   it("supports multiple configured branch prefixes", () => {
     expect(() => assertWritableBranch(baseEnv, "agent/fix-test")).not.toThrow();
     expect(() => assertWritableBranch(baseEnv, "automation/dependency-update")).not.toThrow();
@@ -41,7 +31,6 @@ describe("repository policy", () => {
 
   it("retains legacy BRANCH_PREFIX compatibility", () => {
     const env = {
-      ALLOWED_REPOSITORIES: "XeonFX/Peerly",
       BRANCH_PREFIX: "legacy/",
       ENABLE_WORKFLOW_FILE_CHANGES: "false"
     } as Env;

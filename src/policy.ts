@@ -2,27 +2,6 @@ import type { Env } from "./types";
 import { AppError } from "./errors";
 import { branchWritePolicy, envBool, protectedBranches, writableBranchPrefixes } from "./config";
 
-export function allowedRepositories(env: Env): Array<{ owner: string; repository: string }> {
-  return env.ALLOWED_REPOSITORIES.split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((item) => {
-      const [owner, repository, extra] = item.split("/");
-      if (!owner || !repository || extra) {
-        throw new AppError(`Invalid ALLOWED_REPOSITORIES entry: ${item}`, 500, "configuration_error");
-      }
-      return { owner, repository };
-    });
-}
-
-export function assertRepositoryAllowed(env: Env, owner: string, repository: string): void {
-  const normalized = `${owner}/${repository}`.toLowerCase();
-  const allowed = allowedRepositories(env).some(
-    (entry) => `${entry.owner}/${entry.repository}`.toLowerCase() === normalized
-  );
-  if (!allowed) throw new AppError(`Repository ${owner}/${repository} is not allowlisted`, 403, "repository_not_allowed");
-}
-
 export function assertSafeRef(ref: string): void {
   if (!ref || ref.length > 255) throw new AppError("Invalid ref");
   if (ref.startsWith("-") || ref.endsWith(".") || ref.includes("..") || ref.includes("@{") || ref.includes("\\")) {

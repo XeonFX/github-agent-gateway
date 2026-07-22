@@ -10,7 +10,7 @@
   },
   "homepage": "https://github.com/XeonFX/github-agent-gateway#readme",
   "name": "github-agent-gateway",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "A safe, vendor-neutral GitHub management gateway for AI agents, hosted on Cloudflare Workers.",
@@ -30,7 +30,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "diff": "^7.0.0",
+    "diff": "^9.0.0",
     "hono": "^4.0.0",
     "zod": "^3.23.0"
   },
@@ -40,5 +40,10 @@
     "typescript": "^5.8.0",
     "vitest": "^3.0.0",
     "wrangler": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "sharp@0.34.5": true,
+    "workerd@1.20260721.1": true
   }
 }

@@ -15,7 +15,11 @@
       "migrations_dir": "migrations"
     }
   ],
-"vars": {
+  "vars": {
+
+    // unrestricted lets clients choose any valid branch name except the configured
+    // protected branches and the repository's actual default branch. Auto-generated
+    // branch names still use the first WRITABLE_BRANCH_PREFIXES value.
     "BRANCH_WRITE_POLICY": "unrestricted",
     "WRITABLE_BRANCH_PREFIXES": "agent/",
     "PROTECTED_BRANCHES": "main,master,develop,development,production,release",
@@ -24,7 +28,6 @@
     "MAX_PLAN_FILES": "12",
     "MAX_PLAN_BYTES": "524288",
     "MAX_DIFF_BYTES": "196608",
-
     "ENABLE_MERGE": "false",
     "ENABLE_DESTRUCTIVE_OPERATIONS": "false",
     "ENABLE_ADMIN_OPERATIONS": "false",

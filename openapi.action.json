@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "GitHub Agent Gateway",
-    "version": "1.1.0",
-    "description": "Vendor-neutral gateway for safely managing allowlisted GitHub repositories from AI agents and automation clients. Clients should inspect gateway capabilities before choosing branch names or invoking write operations."
+    "version": "1.2.0",
+    "description": "Vendor-neutral gateway for safely managing repositories selected through GitHub App installations from AI agents and automation clients. Clients should inspect gateway capabilities before choosing branch names or invoking write operations."
   },
   "servers": [
     {
@@ -18,8 +18,8 @@
   "paths": {
     "/v1/capabilities": {
       "get": {
-        "summary": "Get effective gateway capabilities and safety policy",
-        "description": "Call this before write operations. Returns repository allowlists, effective branch policy, protected branches, generated branch prefix, limits, workflow allowlist and enabled feature flags.",
+        "summary": "Discover runtime capabilities and GitHub App installation access mode",
+        "description": "Call this before write operations. Returns GitHub App installation access mode, branch policy, protected branches, generated branch prefix, limits, workflow allowlist and enabled feature flags. Repository names are intentionally omitted.",
         "operationId": "getCapabilities",
         "responses": {
           "200": {
@@ -35,10 +35,33 @@
                     "version": {
                       "type": "string"
                     },
-                    "repositories": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    "repositoryAccess": {
+                      "type": "object",
+                      "required": [
+                        "source",
+                        "installationMode",
+                        "namesExposedInCapabilities"
+                      ],
+                      "properties": {
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "github_app_installations"
+                          ]
+                        },
+                        "installationMode": {
+                          "type": "string",
+                          "enum": [
+                            "fixed",
+                            "all_app_installations"
+                          ]
+                        },
+                        "namesExposedInCapabilities": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        }
                       }
                     },
                     "branchPolicy": {
@@ -93,13 +116,70 @@
     },
     "/v1/repositories": {
       "get": {
-        "summary": "List allowlisted repositories",
+        "summary": "List repositories selected in GitHub App installations",
         "operationId": "listRepositories",
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Installation-accessible repositories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "repositories",
+                    "totalCount"
+                  ],
+                  "properties": {
+                    "repositories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "full_name": {
+                            "type": "string"
+                          },
+                          "private": {
+                            "type": "boolean"
+                          },
+                          "html_url": {
+                            "type": "string"
+                          },
+                          "default_branch": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "owner": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "totalCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
           }
-        }
+        },
+        "description": "Returns repositories that the configured GitHub App installation or installations can access. GitHub installation repository selection is the authoritative access boundary."
       }
     },
     "/v1/repos/{owner}/{repository}": {

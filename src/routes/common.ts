@@ -1,14 +1,16 @@
 import type { Context } from "hono";
 import type { AppVariables, Env } from "../types";
-import { assertRepositoryAllowed } from "../policy";
 import { writeAudit } from "../db";
+import { AppError } from "../errors";
 
 export type AppContext = Context<{ Bindings: Env; Variables: AppVariables }>;
 
 export function repoFromContext(c: AppContext): { owner: string; repository: string } {
   const owner = c.req.param("owner");
   const repository = c.req.param("repository");
-  assertRepositoryAllowed(c.env, owner, repository);
+  if (!owner || !repository) {
+    throw new AppError("Repository route parameters are missing", 400, "missing_repository_parameters");
+  }
   return { owner, repository };
 }
 

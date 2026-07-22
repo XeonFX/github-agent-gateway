@@ -22,8 +22,7 @@ export function requireSecrets(env: Env): void {
   const missing = [
     ["ACTION_API_KEY", env.ACTION_API_KEY],
     ["GITHUB_APP_ID", env.GITHUB_APP_ID],
-    ["GITHUB_PRIVATE_KEY_BASE64", env.GITHUB_PRIVATE_KEY_BASE64],
-    ["ALLOWED_REPOSITORIES", env.ALLOWED_REPOSITORIES]
+    ["GITHUB_PRIVATE_KEY_BASE64", env.GITHUB_PRIVATE_KEY_BASE64]
   ].filter(([, value]) => !value).map(([name]) => name);
 
   if (missing.length > 0) {

@@ -24,7 +24,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.get("/health", (c) => c.json({ ok: true, service: "github-agent-gateway", version: "1.1.0" }));
+app.get("/health", (c) => c.json({ ok: true, service: "github-agent-gateway", version: "1.2.0" }));
 app.get("/openapi.json", (c) => {
   const origin = new URL(c.req.url).origin;
   return c.json({ ...openapiBase, servers: [{ url: origin }] });

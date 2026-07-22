@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Env } from "./types";
 import { GitHubClient } from "./github/client";
 import { AppError, isNotFound } from "./errors";
-import { assertNotDefaultBranch, assertRepositoryAllowed, assertSafePath, assertWritableBranch } from "./policy";
+import { assertNotDefaultBranch, assertSafePath, assertWritableBranch } from "./policy";
 import { addMinutesIso, bytesFromContent, decodeBase64, encodeBase64, nowIso, slugify, truncateUtf8, tryDecodeText } from "./utils";
 import { insertChangePlan, getChangePlan, markPlanApplied, markPlanFailed, type StoredChangePlan } from "./db";
 import { generatedBranchPrefix, planLimits } from "./config";
@@ -14,7 +14,7 @@ export const fileChangeSchema = z.object({
   content: z.string().optional(),
   contentEncoding: z.enum(["utf-8", "base64"]).default("utf-8"),
   mode: z.enum(["100644", "100755", "120000"]).optional()
-}).superRefine((value: { operation: "create" | "update" | "delete"; content?: string }, ctx: { addIssue(issue: { code: "custom"; message: string }): void }) => {
+}).superRefine((value, ctx) => {
   if (value.operation !== "delete" && value.content === undefined) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "content is required for create and update" });
   }
@@ -90,7 +90,6 @@ async function readFileAtRef(client: GitHubClient, owner: string, repository: st
 }
 
 export async function createChangePlan(env: Env, input: CreateChangePlanInput): Promise<StoredChangePlan> {
-  assertRepositoryAllowed(env, input.owner, input.repository);
   const limits = planLimits(env);
   if (input.files.length > limits.maxFiles) {
     throw new AppError(`A change plan may contain at most ${limits.maxFiles} files`, 413, "plan_too_large");

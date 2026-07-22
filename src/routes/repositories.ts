@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables, Env } from "../types";
-import { allowedRepositories, assertNotDefaultBranch, assertReadablePath, assertWritableBranch, requireFeature } from "../policy";
+import { assertNotDefaultBranch, assertReadablePath, assertWritableBranch, requireFeature } from "../policy";
 import { GitHubClient } from "../github/client";
 import { repoFromContext, audit } from "./common";
 import { createBranchSchema, repositorySettingsSchema, confirmationSchema } from "../schemas";
@@ -15,8 +15,12 @@ repositoryRoutes.get("/capabilities", (c) => {
   const limits = planLimits(c.env);
   return c.json({
     service: "github-agent-gateway",
-    version: "1.1.0",
-    repositories: allowedRepositories(c.env).map(({ owner, repository }) => `${owner}/${repository}`),
+    version: "1.2.0",
+    repositoryAccess: {
+      source: "github_app_installations",
+      installationMode: c.env.GITHUB_INSTALLATION_ID?.trim() ? "fixed" : "all_app_installations",
+      namesExposedInCapabilities: false
+    },
     branchPolicy: {
       mode: branchWritePolicy(c.env),
       writablePrefixes: writableBranchPrefixes(c.env),
@@ -39,19 +43,8 @@ repositoryRoutes.get("/capabilities", (c) => {
 });
 
 repositoryRoutes.get("/repositories", async (c) => {
-  const client = new GitHubClient(c.env);
-  const repositories = await Promise.all(allowedRepositories(c.env).map(async ({ owner, repository }) => {
-    try {
-      return await client.request<Record<string, unknown>>(
-        "GET",
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`,
-        { owner, repository }
-      );
-    } catch (error) {
-      return { full_name: `${owner}/${repository}`, error: error instanceof Error ? error.message : String(error) };
-    }
-  }));
-  return c.json({ repositories });
+  const repositories = await new GitHubClient(c.env).listInstallationRepositories();
+  return c.json({ repositories, totalCount: repositories.length });
 });
 
 repositoryRoutes.get("/repos/:owner/:repository", async (c) => {
