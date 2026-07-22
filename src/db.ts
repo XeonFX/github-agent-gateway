@@ -128,7 +128,7 @@ export async function writeAudit(
         repository, target, success, metadata_json
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      crypto.randomUUID(), input.requestId, nowIso(), input.actor ?? "chatgpt-action",
+      crypto.randomUUID(), input.requestId, nowIso(), input.actor ?? "agent-client",
       input.operation, input.owner ?? null, input.repository ?? null,
       input.target ?? null, input.success ? 1 : 0, JSON.stringify(input.metadata ?? {})
     ).run();

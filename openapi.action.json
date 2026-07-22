@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "GitHub Agent Gateway",
-    "version": "1.0.0",
-    "description": "Safely manage allowlisted GitHub repositories. Preview code changes before applying them. Destructive and admin operations require exact confirmation strings and server-side feature flags."
+    "version": "1.1.0",
+    "description": "Vendor-neutral gateway for safely managing allowlisted GitHub repositories from AI agents and automation clients. Clients should inspect gateway capabilities before choosing branch names or invoking write operations."
   },
   "servers": [
     {
@@ -16,6 +16,81 @@
     }
   ],
   "paths": {
+    "/v1/capabilities": {
+      "get": {
+        "summary": "Get effective gateway capabilities and safety policy",
+        "description": "Call this before write operations. Returns repository allowlists, effective branch policy, protected branches, generated branch prefix, limits, workflow allowlist and enabled feature flags.",
+        "operationId": "getCapabilities",
+        "responses": {
+          "200": {
+            "description": "Effective gateway capabilities and policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "repositories": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "branchPolicy": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "prefixed",
+                            "unrestricted"
+                          ]
+                        },
+                        "writablePrefixes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "generatedPrefix": {
+                          "type": "string"
+                        },
+                        "protectedBranches": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "defaultBranchWritesAllowed": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "limits": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "workflows": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repositories": {
       "get": {
         "summary": "List allowlisted repositories",
@@ -222,7 +297,7 @@
         ]
       },
       "post": {
-        "summary": "Create an agent branch",
+        "summary": "Create a writable branch",
         "operationId": "createBranch",
         "responses": {
           "201": {
@@ -268,19 +343,20 @@
               }
             }
           }
-        }
+        },
+        "description": "Creates a branch allowed by the effective branch policy. Call getCapabilities first. Direct writes to the repository default branch are never allowed."
       }
     },
     "/v1/repos/{owner}/{repository}/branches/{branch}": {
       "delete": {
-        "summary": "Delete an agent branch",
+        "summary": "Delete a writable branch",
         "operationId": "deleteBranch",
         "responses": {
           "204": {
             "description": "Success"
           }
         },
-        "description": "Disabled by default. Confirmation: DELETE BRANCH owner/repository branch.",
+        "description": "Deletes a non-default branch allowed by the effective branch policy. Requires destructive operations to be enabled and an exact confirmation phrase.",
         "parameters": [
           {
             "name": "owner",
@@ -2429,10 +2505,12 @@
             "type": "string"
           },
           "baseBranch": {
-            "type": "string"
+            "type": "string",
+            "description": "Branch or ref whose current head is used as the immutable base for the preview."
           },
           "proposedBranch": {
-            "type": "string"
+            "type": "string",
+            "description": "Target branch. Omit to auto-generate a name using the configured generated prefix. When unrestricted mode is enabled, any safe non-protected, non-default branch name is accepted."
           },
           "commitMessage": {
             "type": "string"

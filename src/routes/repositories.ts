@@ -1,15 +1,42 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables, Env } from "../types";
-import { allowedRepositories, assertAgentBranch, assertReadablePath, requireFeature } from "../policy";
+import { allowedRepositories, assertNotDefaultBranch, assertReadablePath, assertWritableBranch, requireFeature } from "../policy";
 import { GitHubClient } from "../github/client";
 import { repoFromContext, audit } from "./common";
 import { createBranchSchema, repositorySettingsSchema, confirmationSchema } from "../schemas";
 import { assertExactConfirmation } from "../utils";
-import { envBool } from "../config";
+import { allowedWorkflows, branchWritePolicy, envBool, generatedBranchPrefix, planLimits, protectedBranches, writableBranchPrefixes } from "../config";
 import { AppError, isNotFound } from "../errors";
 
 export const repositoryRoutes = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+
+repositoryRoutes.get("/capabilities", (c) => {
+  const limits = planLimits(c.env);
+  return c.json({
+    service: "github-agent-gateway",
+    version: "1.1.0",
+    repositories: allowedRepositories(c.env).map(({ owner, repository }) => `${owner}/${repository}`),
+    branchPolicy: {
+      mode: branchWritePolicy(c.env),
+      writablePrefixes: writableBranchPrefixes(c.env),
+      generatedPrefix: generatedBranchPrefix(c.env),
+      protectedBranches: [...protectedBranches(c.env)],
+      defaultBranchWritesAllowed: false
+    },
+    limits,
+    workflows: {
+      writeEnabled: envBool(c.env.ENABLE_WORKFLOW_WRITE),
+      fileChangesEnabled: envBool(c.env.ENABLE_WORKFLOW_FILE_CHANGES),
+      allowlist: [...allowedWorkflows(c.env)]
+    },
+    features: {
+      merge: envBool(c.env.ENABLE_MERGE),
+      destructiveOperations: envBool(c.env.ENABLE_DESTRUCTIVE_OPERATIONS),
+      administration: envBool(c.env.ENABLE_ADMIN_OPERATIONS)
+    }
+  });
+});
 
 repositoryRoutes.get("/repositories", async (c) => {
   const client = new GitHubClient(c.env);
@@ -99,8 +126,14 @@ repositoryRoutes.get("/repos/:owner/:repository/branches", async (c) => {
 repositoryRoutes.post("/repos/:owner/:repository/branches", async (c) => {
   const { owner, repository } = repoFromContext(c);
   const input = createBranchSchema.parse(await c.req.json());
-  assertAgentBranch(c.env, input.name);
+  assertWritableBranch(c.env, input.name);
   const client = new GitHubClient(c.env);
+  const metadata = await client.request<{ default_branch: string | null }>(
+    "GET",
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`,
+    { owner, repository }
+  );
+  assertNotDefaultBranch(input.name, metadata.default_branch);
   const source = await client.request<{ object: { sha: string } }>(
     "GET",
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/git/ref/heads/${input.fromRef.split("/").map(encodeURIComponent).join("/")}`,
@@ -119,10 +152,17 @@ repositoryRoutes.delete("/repos/:owner/:repository/branches/:branch", async (c) 
   const { owner, repository } = repoFromContext(c);
   requireFeature(envBool(c.env.ENABLE_DESTRUCTIVE_OPERATIONS), "Destructive operations");
   const branch = c.req.param("branch");
-  assertAgentBranch(c.env, branch);
+  assertWritableBranch(c.env, branch);
+  const client = new GitHubClient(c.env);
+  const metadata = await client.request<{ default_branch: string | null }>(
+    "GET",
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`,
+    { owner, repository }
+  );
+  assertNotDefaultBranch(branch, metadata.default_branch);
   const input = confirmationSchema.parse(await c.req.json());
   assertExactConfirmation(input.confirmation, `DELETE BRANCH ${owner}/${repository} ${branch}`);
-  await new GitHubClient(c.env).request(
+  await client.request(
     "DELETE",
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/git/refs/heads/${branch.split("/").map(encodeURIComponent).join("/")}`,
     { owner, repository }

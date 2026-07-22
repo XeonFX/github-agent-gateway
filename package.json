@@ -10,10 +10,10 @@
   },
   "homepage": "https://github.com/XeonFX/github-agent-gateway#readme",
   "name": "github-agent-gateway",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "A safe GitHub management gateway for ChatGPT Custom Actions, hosted on Cloudflare Workers.",
+  "description": "A safe, vendor-neutral GitHub management gateway for AI agents, hosted on Cloudflare Workers.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

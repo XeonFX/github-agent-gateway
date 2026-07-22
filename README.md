@@ -1,10 +1,10 @@
 # GitHub Agent Gateway
 
-A deployable **Cloudflare Worker** that gives a ChatGPT Custom Action controlled access to GitHub repositories through a GitHub App.
+A deployable, vendor-neutral **Cloudflare Worker** that gives AI agents and automation clients controlled access to GitHub repositories through a GitHub App.
 
 It can read repositories, preview and apply atomic multi-file commits, create and manage pull requests, inspect and dispatch allowlisted GitHub Actions workflows, manage issues and labels, create releases and tags, and optionally perform administrative operations such as branch protection and collaborator management.
 
-The gateway deliberately does **not** expose an arbitrary shell or unrestricted GitHub API proxy.
+It works with ChatGPT Custom Actions, custom coding agents, bots, CI services, or any client that can call a Bearer-authenticated OpenAPI/HTTP API. The gateway deliberately does **not** expose an arbitrary shell or unrestricted GitHub API proxy.
 
 ## Highlights
 
@@ -15,12 +15,13 @@ The gateway deliberately does **not** expose an arbitrary shell or unrestricted 
 - Unified diff preview before every code-writing operation
 - Atomic multi-file commits using Git blobs, trees, commits and refs
 - Base-SHA optimistic concurrency protection
-- Mandatory `chatgpt/` branch prefix
+- Configurable branch write policy: neutral prefixes or unrestricted non-protected branch names
 - Draft pull requests by default
 - Allowlisted workflow dispatch instead of arbitrary command execution
 - D1 audit log and idempotency support
 - Sensitive-file and workflow-file policy checks
 - Destructive, merge and administration features disabled by default
+- Discoverable runtime policy at `/v1/capabilities`
 - Dynamic OpenAPI document at `/openapi.json`
 
 ## What is supported
@@ -42,7 +43,7 @@ Not implemented intentionally: repository secrets, environment secrets, deploy k
 ## Architecture
 
 ```text
-ChatGPT Custom GPT
+AI agent / automation client
         |
         | HTTPS + Bearer API key
         v
@@ -65,7 +66,7 @@ The Worker never runs `npm install`, `dotnet build`, Playwright or shell command
 - Node.js 20 or newer
 - A Cloudflare account
 - A GitHub account with permission to create a GitHub App
-- A ChatGPT plan that supports creating Custom GPTs and Actions
+- An API client; a ChatGPT plan supporting Custom GPT Actions is needed only for the ChatGPT integration
 
 ## 1. Create the GitHub App
 
@@ -80,7 +81,7 @@ Suggested values:
 
 | Field | Value |
 |---|---|
-| GitHub App name | `YourName ChatGPT Repository Agent` |
+| GitHub App name | `YourName Repository Agent Gateway` |
 | Homepage URL | Your Worker URL later, or a placeholder HTTPS URL |
 | Callback URL | Leave empty |
 | Webhook | Disable for the initial version |
@@ -184,14 +185,16 @@ Apply it to Cloudflare:
 npm run db:migrate:remote
 ```
 
-## 4. Configure repository policy
+## 4. Configure repository and branch policy
 
 Edit the non-secret variables in `wrangler.jsonc`:
 
 ```jsonc
 "vars": {
-  "ALLOWED_REPOSITORIES": "XeonFX/Peerly,XeonFX/HeyHubs",
-  "BRANCH_PREFIX": "chatgpt/",
+  "ALLOWED_REPOSITORIES": "XeonFX/Peerly,XeonFX/HeyHubs,XeonFX/github-agent-gateway",
+  "BRANCH_WRITE_POLICY": "unrestricted",
+  "WRITABLE_BRANCH_PREFIXES": "agent/",
+  "PROTECTED_BRANCHES": "main,master,develop,development,production,release",
   "PLAN_TTL_MINUTES": "30",
   "MAX_PLAN_FILES": "12",
   "MAX_PLAN_BYTES": "524288",
@@ -204,6 +207,33 @@ Edit the non-secret variables in `wrangler.jsonc`:
   "ALLOWED_WORKFLOWS": "agent-validation.yml"
 }
 ```
+
+### Branch write policy
+
+The branch policy is vendor-neutral and is returned by `GET /v1/capabilities`.
+
+| Variable | Default | Meaning |
+|---|---:|---|
+| `BRANCH_WRITE_POLICY` | `prefixed` | `prefixed` requires one of the configured prefixes; `unrestricted` permits any safe branch name except protected and actual default branches |
+| `WRITABLE_BRANCH_PREFIXES` | `agent/` | Comma-separated prefixes accepted in `prefixed` mode; the first prefix is also used for automatically generated names in either mode |
+| `PROTECTED_BRANCHES` | `main,master` | Comma-separated branch names that the gateway will never create, update or delete |
+
+Recommended modes:
+
+```jsonc
+// Safest shared deployment: every client uses a neutral namespace.
+"BRANCH_WRITE_POLICY": "prefixed",
+"WRITABLE_BRANCH_PREFIXES": "agent/,automation/"
+```
+
+```jsonc
+// Flexible personal deployment: clients may choose feature/*, fix/*, dependabot-like
+// names, and so on, while protected and actual default branches remain blocked.
+"BRANCH_WRITE_POLICY": "unrestricted",
+"WRITABLE_BRANCH_PREFIXES": "agent/"
+```
+
+`BRANCH_PREFIX` is retained only as a deprecated compatibility fallback. New deployments should use `WRITABLE_BRANCH_PREFIXES`.
 
 ### Feature flags
 
@@ -246,9 +276,13 @@ Public health endpoint:
 curl http://localhost:8787/health
 ```
 
-Authenticated repository list:
+Authenticated capability discovery and repository list:
 
 ```bash
+curl \
+  -H "Authorization: Bearer YOUR_ACTION_API_KEY" \
+  http://localhost:8787/v1/capabilities
+
 curl \
   -H "Authorization: Bearer YOUR_ACTION_API_KEY" \
   http://localhost:8787/v1/repositories
@@ -306,7 +340,11 @@ Adapt the commands to the repository. For a .NET repository, for example:
 
 Keep workflow permissions minimal. Do not expose production secrets to validation jobs triggered for agent-created branches unless absolutely necessary.
 
-## 9. Configure the Custom GPT Action
+## 9. Connect a client
+
+Any HTTP client can use the gateway with `Authorization: Bearer <ACTION_API_KEY>`. Clients should call `GET /v1/capabilities` before write operations instead of assuming branch names or enabled features.
+
+### ChatGPT Custom Action
 
 1. Open the GPT builder.
 2. Create or edit your private Custom GPT.
@@ -370,7 +408,7 @@ curl -X POST "$BASE_URL/v1/change-plans/PLAN_ID/apply" \
   -H "Content-Type: application/json" \
   -d '{
     "expectedBaseSha": "SHA_FROM_PREVIEW",
-    "confirmation": "APPLY XeonFX/Peerly chatgpt/fix-stabilize-attachments-20260722-abc123"
+    "confirmation": "APPLY XeonFX/Peerly agent/fix-stabilize-attachments-20260722-abc123"
   }'
 ```
 
@@ -381,9 +419,10 @@ The Worker verifies that:
 - the base SHA is unchanged;
 - the target branch does not already exist;
 - all paths still satisfy policy;
-- the branch uses the configured prefix.
+- the branch satisfies the effective `prefixed` or `unrestricted` policy;
+- the branch is not protected and is not the repository default branch.
 
-It then creates blobs, one tree and one commit. For a new branch it creates a branch ref; for a follow-up commit it advances an existing `chatgpt/` branch without force-pushing.
+It then creates blobs, one tree and one commit. For a new branch it creates a branch ref; for a follow-up commit it advances an existing writable branch without force-pushing.
 
 ### Add a follow-up commit to an existing PR branch
 
@@ -391,8 +430,8 @@ Create another change plan with `baseBranch` and `proposedBranch` set to the sam
 
 ```json
 {
-  "baseBranch": "chatgpt/fix-attachment-sync",
-  "proposedBranch": "chatgpt/fix-attachment-sync"
+  "baseBranch": "feature/fix-attachment-sync",
+  "proposedBranch": "feature/fix-attachment-sync"
 }
 ```
 
@@ -427,6 +466,7 @@ The complete Custom Action schema is in `openapi.action.json` and is served dyna
 Main route groups:
 
 ```text
+GET       /v1/capabilities
 GET/PATCH /v1/repos/{owner}/{repository}
 GET       /v1/repos/{owner}/{repository}/contents
 GET       /v1/repos/{owner}/{repository}/tree
@@ -461,11 +501,11 @@ The Worker signs a short-lived GitHub App JWT, exchanges it for an installation 
 
 ### No arbitrary shell
 
-The Action can dispatch only workflows named in `ALLOWED_WORKFLOWS`. The workflow file defines the actual commands.
+The gateway can dispatch only workflows named in `ALLOWED_WORKFLOWS`. The workflow file defines the actual commands.
 
 ### Protected code-writing flow
 
-The action cannot directly submit a generic file-write request. Code changes must pass through preview and apply.
+The client cannot directly submit a generic file-write request. Code changes must pass through preview and apply. The gateway blocks its configured protected branches and dynamically rejects the repository's actual default branch, even when unrestricted naming mode is enabled.
 
 ### Sensitive paths
 
@@ -559,9 +599,14 @@ Set `ENABLE_ADMIN_OPERATIONS=true`, grant the GitHub App **Administration** perm
 - [ ] `ENABLE_ADMIN_OPERATIONS=false` initially
 - [ ] Minimal GitHub App permissions
 - [ ] Validation workflows have minimal permissions
-- [ ] Custom GPT is private
+- [ ] Client integration is private while testing
 - [ ] Preview/apply workflow tested on a disposable branch
 - [ ] Branch protection requires CI before merge
+- [ ] `GET /v1/capabilities` returns the expected branch policy
+
+## Detailed deployment guide
+
+See [`docs/CLOUDFLARE_DEPLOYMENT.md`](docs/CLOUDFLARE_DEPLOYMENT.md) for a dashboard-oriented, step-by-step deployment checklist.
 
 ## License
 

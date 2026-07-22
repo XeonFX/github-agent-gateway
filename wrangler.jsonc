@@ -15,13 +15,16 @@
       "migrations_dir": "migrations"
     }
   ],
-  "vars": {
-    "ALLOWED_REPOSITORIES": "XeonFX/Peerly,XeonFX/HeyHubs",
-    "BRANCH_PREFIX": "chatgpt/",
+"vars": {
+    "BRANCH_WRITE_POLICY": "unrestricted",
+    "WRITABLE_BRANCH_PREFIXES": "agent/",
+    "PROTECTED_BRANCHES": "main,master,develop,development,production,release",
+
     "PLAN_TTL_MINUTES": "30",
     "MAX_PLAN_FILES": "12",
     "MAX_PLAN_BYTES": "524288",
     "MAX_DIFF_BYTES": "196608",
+
     "ENABLE_MERGE": "false",
     "ENABLE_DESTRUCTIVE_OPERATIONS": "false",
     "ENABLE_ADMIN_OPERATIONS": "false",

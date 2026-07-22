@@ -1,21 +1,22 @@
 # Validation report
 
-Validation performed while generating this package:
+Validation performed for version 1.1.0:
 
-- TypeScript source parsed and type-checked against local interface stubs for Hono, Zod, Cloudflare D1 and Vitest.
-- All 55 implemented HTTP operations match the operations in `openapi.action.json`.
+- TypeScript source type-checked against local interface stubs for Hono, Zod, Cloudflare D1, Node crypto and Vitest.
+- The new branch policy was executed in a runtime smoke test covering prefixed mode, unrestricted mode, protected branches and default-branch blocking.
+- All 56 authenticated HTTP operations match the operations in `openapi.action.json`.
 - Every OpenAPI path placeholder has a corresponding required path parameter.
 - All OpenAPI `operationId` values are unique.
 - `package.json`, `tsconfig.json`, `wrangler.jsonc` and `openapi.action.json` parse successfully.
 - The D1 migration executes successfully in an empty SQLite database.
 - Both GitHub Actions workflow files parse successfully as YAML.
-- No private key blocks, GitHub token patterns, TODOs or FIXMEs were found in the generated source.
+- The detailed Cloudflare deployment guide and vendor-neutral client instructions are included.
 
 ## Check not completed in the generation environment
 
-The npm package registry was unreachable from the generation container: repeated `npm install` attempts timed out. Therefore the real dependency-backed `npm run check` command and Vitest suite were not executed here.
+The npm package registry was unreachable from the generation container: `npm install` timed out. Therefore the real dependency-backed `npm run check` command and Vitest suite were not executed here.
 
-Run these commands after downloading:
+Run these commands after applying the patch:
 
 ```bash
 npm install

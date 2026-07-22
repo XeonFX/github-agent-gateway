@@ -3,7 +3,7 @@ import type { AppVariables, Env } from "../types";
 import { GitHubClient } from "../github/client";
 import { repoFromContext, audit } from "./common";
 import { createPullSchema, updatePullSchema, mergePullSchema, commentSchema, reviewersSchema, createReviewSchema, issueNumberSchema } from "../schemas";
-import { assertAgentBranch, requireFeature } from "../policy";
+import { assertWritableBranch, requireFeature } from "../policy";
 import { assertExactConfirmation } from "../utils";
 import { envBool } from "../config";
 import { linkPlanPullRequest } from "../db";
@@ -30,7 +30,7 @@ pullRoutes.get("/repos/:owner/:repository/pulls", async (c) => {
 pullRoutes.post("/repos/:owner/:repository/pulls", async (c) => {
   const { owner, repository } = repoFromContext(c);
   const input = createPullSchema.parse(await c.req.json());
-  assertAgentBranch(c.env, input.head.includes(":") ? input.head.split(":").at(-1)! : input.head);
+  assertWritableBranch(c.env, input.head.includes(":") ? input.head.split(":").at(-1)! : input.head);
   const result = await new GitHubClient(c.env).request<{ number: number } & Record<string, unknown>>(
     "POST",
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/pulls`,

@@ -3,10 +3,10 @@ import { z } from "zod";
 import type { Env } from "./types";
 import { GitHubClient } from "./github/client";
 import { AppError, isNotFound } from "./errors";
-import { assertAgentBranch, assertRepositoryAllowed, assertSafePath } from "./policy";
+import { assertNotDefaultBranch, assertRepositoryAllowed, assertSafePath, assertWritableBranch } from "./policy";
 import { addMinutesIso, bytesFromContent, decodeBase64, encodeBase64, nowIso, slugify, truncateUtf8, tryDecodeText } from "./utils";
 import { insertChangePlan, getChangePlan, markPlanApplied, markPlanFailed, type StoredChangePlan } from "./db";
-import { branchPrefix, planLimits } from "./config";
+import { generatedBranchPrefix, planLimits } from "./config";
 
 export const fileChangeSchema = z.object({
   path: z.string().min(1).max(1024),
@@ -61,7 +61,7 @@ function encodeRef(ref: string): string {
 
 function generatedBranch(env: Env, message: string): string {
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  return `${branchPrefix(env)}${slugify(message)}-${date}-${crypto.randomUUID().slice(0, 6)}`;
+  return `${generatedBranchPrefix(env)}${slugify(message)}-${date}-${crypto.randomUUID().slice(0, 6)}`;
 }
 
 async function readFileAtRef(client: GitHubClient, owner: string, repository: string, path: string, ref: string): Promise<GitHubContentFile | undefined> {
@@ -108,8 +108,14 @@ export async function createChangePlan(env: Env, input: CreateChangePlanInput): 
   }
 
   const proposedBranch = input.proposedBranch || generatedBranch(env, input.titleHint || input.commitMessage);
-  assertAgentBranch(env, proposedBranch);
+  assertWritableBranch(env, proposedBranch);
   const client = new GitHubClient(env);
+  const repository = await client.request<{ default_branch: string | null }>(
+    "GET",
+    `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repository)}`,
+    { owner: input.owner, repository: input.repository }
+  );
+  assertNotDefaultBranch(proposedBranch, repository.default_branch);
   const baseRef = await client.request<GitRefResponse>(
     "GET",
     `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repository)}/git/ref/heads/${encodeRef(input.baseBranch)}`,
@@ -192,6 +198,14 @@ export async function applyChangePlan(env: Env, planId: string, expectedBaseSha:
 
   const client = new GitHubClient(env);
   try {
+    const repository = await client.request<{ default_branch: string | null }>(
+      "GET",
+      `/repos/${encodeURIComponent(plan.owner)}/${encodeURIComponent(plan.repository)}`,
+      { owner: plan.owner, repository: plan.repository }
+    );
+    assertWritableBranch(env, plan.proposedBranch);
+    assertNotDefaultBranch(plan.proposedBranch, repository.default_branch);
+
     const currentBase = await client.request<GitRefResponse>(
       "GET",
       `/repos/${encodeURIComponent(plan.owner)}/${encodeURIComponent(plan.repository)}/git/ref/heads/${encodeRef(plan.baseBranch)}`,
@@ -206,7 +220,7 @@ export async function applyChangePlan(env: Env, planId: string, expectedBaseSha:
 
     const updateExistingBranch = plan.proposedBranch === plan.baseBranch;
     if (updateExistingBranch) {
-      assertAgentBranch(env, plan.baseBranch);
+      assertWritableBranch(env, plan.baseBranch);
     } else {
       try {
         await client.request(

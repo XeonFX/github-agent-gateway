@@ -24,7 +24,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.get("/health", (c) => c.json({ ok: true, service: "github-agent-gateway", version: "1.0.0" }));
+app.get("/health", (c) => c.json({ ok: true, service: "github-agent-gateway", version: "1.1.0" }));
 app.get("/openapi.json", (c) => {
   const origin = new URL(c.req.url).origin;
   return c.json({ ...openapiBase, servers: [{ url: origin }] });
@@ -37,7 +37,7 @@ app.use("/v1/*", async (c, next) => {
   if (!token || !constantTimeEqual(token, c.env.ACTION_API_KEY)) {
     throw new AppError("Invalid or missing bearer token", 401, "unauthorized");
   }
-  c.set("actor", c.req.header("X-Agent-Actor")?.slice(0, 100) || "chatgpt-action");
+  c.set("actor", c.req.header("X-Agent-Actor")?.slice(0, 100) || "agent-client");
   await next();
 });
 

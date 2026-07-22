@@ -1,6 +1,6 @@
 import type { Env } from "./types";
 import { AppError } from "./errors";
-import { branchPrefix, envBool } from "./config";
+import { branchWritePolicy, envBool, protectedBranches, writableBranchPrefixes } from "./config";
 
 export function allowedRepositories(env: Env): Array<{ owner: string; repository: string }> {
   return env.ALLOWED_REPOSITORIES.split(",")
@@ -33,13 +33,36 @@ export function assertSafeRef(ref: string): void {
   }
 }
 
-export function assertAgentBranch(env: Env, branch: string): void {
-  assertSafeRef(branch);
-  const prefix = branchPrefix(env);
-  if (!branch.startsWith(prefix)) {
-    throw new AppError(`Writable branches must start with ${prefix}`, 403, "branch_prefix_required");
+export function assertNotProtectedBranch(env: Env, branch: string): void {
+  if (protectedBranches(env).has(branch.toLowerCase())) {
+    throw new AppError(`Branch ${branch} is protected by gateway policy`, 403, "protected_branch");
   }
 }
+
+export function assertNotDefaultBranch(branch: string, defaultBranch: string | null | undefined): void {
+  if (defaultBranch && branch.toLowerCase() === defaultBranch.toLowerCase()) {
+    throw new AppError(`Direct writes to the default branch ${defaultBranch} are not allowed`, 403, "default_branch");
+  }
+}
+
+export function assertWritableBranch(env: Env, branch: string): void {
+  assertSafeRef(branch);
+  assertNotProtectedBranch(env, branch);
+
+  if (branchWritePolicy(env) === "unrestricted") return;
+
+  const prefixes = writableBranchPrefixes(env);
+  if (!prefixes.some((prefix) => branch.startsWith(prefix))) {
+    throw new AppError(
+      `Writable branches must start with one of: ${prefixes.join(", ")}`,
+      403,
+      "branch_prefix_required"
+    );
+  }
+}
+
+/** @deprecated Use assertWritableBranch. */
+export const assertAgentBranch = assertWritableBranch;
 
 function validatePath(path: string): { normalized: string; lower: string; fileName: string } {
   const normalized = path.replace(/^\/+/, "");

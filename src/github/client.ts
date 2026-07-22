@@ -4,6 +4,7 @@ import { createGitHubAppJwt } from "./jwt";
 
 const API_ROOT = "https://api.github.com";
 const API_VERSION = "2022-11-28";
+const USER_AGENT = "github-agent-gateway/1.1";
 
 interface CachedToken {
   token: string;
@@ -40,10 +41,10 @@ export class GitHubClient {
         Accept: options.accept ?? "application/vnd.github+json",
         Authorization: `Bearer ${token}`,
         "X-GitHub-Api-Version": API_VERSION,
-        "User-Agent": "github-agent-gateway/1.0",
+        "User-Agent": USER_AGENT,
         ...(options.body !== undefined ? { "Content-Type": "application/json" } : {})
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body)
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {})
     });
 
     if (!response.ok) {
@@ -78,7 +79,7 @@ export class GitHubClient {
         Accept: options.accept ?? "application/vnd.github+json",
         Authorization: `Bearer ${token}`,
         "X-GitHub-Api-Version": API_VERSION,
-        "User-Agent": "github-agent-gateway/1.0"
+        "User-Agent": USER_AGENT
       }
     });
   }
