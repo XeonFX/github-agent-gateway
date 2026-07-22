@@ -34,6 +34,25 @@ describe("ChatGPT OpenAPI schema", () => {
     expect(document.info.description).toContain("30-operation subset");
   });
 
+  it("gives every object request body explicit properties", () => {
+    const document = createChatGptOpenApiDocument(fullDocument, "https://gateway.example.com");
+
+    for (const [path, pathItem] of Object.entries(document.paths)) {
+      for (const [method, value] of Object.entries(pathItem)) {
+        if (typeof value !== "object" || value === null || !("requestBody" in value)) continue;
+
+        const operation = value as {
+          requestBody?: { content?: { "application/json"?: { schema?: Record<string, unknown> } } };
+        };
+        const schema = operation.requestBody?.content?.["application/json"]?.schema;
+        if (schema?.type === "object") {
+          expect(schema.properties, `${method.toUpperCase()} ${path} should declare body properties`).toBeDefined();
+          expect(Object.keys(schema.properties as object).length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
   it("omits destructive and administrative operations", () => {
     const document = createChatGptOpenApiDocument(fullDocument, "https://gateway.example.com");
     const operationIds = new Set(listOperationIds(document));
