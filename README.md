@@ -1,33 +1,34 @@
 # GitHub Agent Gateway
 
-A deployable **Cloudflare Worker** that gives a ChatGPT Custom Action controlled access to GitHub repositories through a GitHub App.
+A deployable, vendor-neutral **Cloudflare Worker** that gives AI agents and automation clients controlled access to GitHub repositories through a GitHub App.
 
 It can read repositories, preview and apply atomic multi-file commits, create and manage pull requests, inspect and dispatch allowlisted GitHub Actions workflows, manage issues and labels, create releases and tags, and optionally perform administrative operations such as branch protection and collaborator management.
 
-The gateway deliberately does **not** expose an arbitrary shell or unrestricted GitHub API proxy.
+It works with ChatGPT Custom Actions, custom coding agents, bots, CI services, or any client that can call a Bearer-authenticated OpenAPI/HTTP API. The gateway deliberately does **not** expose an arbitrary shell or unrestricted GitHub API proxy.
 
 ## Highlights
 
 - Cloudflare Workers + TypeScript + Hono
 - GitHub App authentication with one-hour installation tokens
-- Exact repository allowlist
+- GitHub App installation selection as the single repository access boundary
 - Immutable D1-backed change plans
 - Unified diff preview before every code-writing operation
 - Atomic multi-file commits using Git blobs, trees, commits and refs
 - Base-SHA optimistic concurrency protection
-- Mandatory `chatgpt/` branch prefix
+- Configurable branch write policy: neutral prefixes or unrestricted non-protected branch names
 - Draft pull requests by default
 - Allowlisted workflow dispatch instead of arbitrary command execution
 - D1 audit log and idempotency support
 - Sensitive-file and workflow-file policy checks
 - Destructive, merge and administration features disabled by default
+- Discoverable runtime policy at `/v1/capabilities`
 - Dynamic OpenAPI document at `/openapi.json`
 
 ## What is supported
 
 | Area | Operations |
 |---|---|
-| Repository | List allowlisted repositories, metadata, contents, recursive tree, settings update when enabled |
+| Repository | Discover installation-accessible repositories, metadata, contents, recursive tree, settings update when enabled |
 | Git | Branch list/create/delete, safe follow-up commits, commit list/read, ref comparison, tags |
 | Code changes | Immutable preview, textual/binary change summary, atomic commit, stale-plan protection |
 | Pull requests | List, read, create, edit, comment, reviewers, reviews, optional merge |
@@ -42,7 +43,7 @@ Not implemented intentionally: repository secrets, environment secrets, deploy k
 ## Architecture
 
 ```text
-ChatGPT Custom GPT
+AI agent / automation client
         |
         | HTTPS + Bearer API key
         v
@@ -65,7 +66,7 @@ The Worker never runs `npm install`, `dotnet build`, Playwright or shell command
 - Node.js 20 or newer
 - A Cloudflare account
 - A GitHub account with permission to create a GitHub App
-- A ChatGPT plan that supports creating Custom GPTs and Actions
+- An API client; a ChatGPT plan supporting Custom GPT Actions is needed only for the ChatGPT integration
 
 ## 1. Create the GitHub App
 
@@ -80,7 +81,7 @@ Suggested values:
 
 | Field | Value |
 |---|---|
-| GitHub App name | `YourName ChatGPT Repository Agent` |
+| GitHub App name | `YourName Repository Agent Gateway` |
 | Homepage URL | Your Worker URL later, or a placeholder HTTPS URL |
 | Callback URL | Leave empty |
 | Webhook | Disable for the initial version |
@@ -114,7 +115,19 @@ After creating the app:
 4. Select **Only select repositories**.
 5. Choose the repositories this gateway may manage.
 
-You may optionally note the installation ID from the installation URL. It is safe to omit it because the Worker can resolve the installation from each repository.
+You may optionally note the installation ID from the installation URL. Leave it unset to discover every active installation owned by this GitHub App; set it to restrict the gateway to one installation. Repository names are never stored in Worker configuration.
+
+### Repository access model
+
+There is no `ALLOWED_REPOSITORIES` variable. GitHub App installation selection is the source of truth:
+
+- **Only select repositories** is recommended. Every selected repository becomes manageable through the gateway.
+- **All repositories** intentionally grants the gateway access to every current repository in that account and repositories created later.
+- Leaving `GITHUB_INSTALLATION_ID` empty aggregates repositories from all active installations owned by the app.
+- Setting `GITHUB_INSTALLATION_ID` limits discovery and requests to one installation. This is recommended when the app is installed on multiple accounts but a deployment should manage only one.
+- Repository selection changes are picked up without redeploying. Successful lookups are cached in Worker memory for up to 30 seconds.
+
+`GET /v1/capabilities` reports the access mode but deliberately omits repository names. Authenticated clients can obtain the current selection from `GET /v1/repositories`. Every repository request resolves the app installation and verifies membership in `GET /installation/repositories` before using an installation token.
 
 ## 2. Install the project
 
@@ -184,14 +197,15 @@ Apply it to Cloudflare:
 npm run db:migrate:remote
 ```
 
-## 4. Configure repository policy
+## 4. Configure branch and feature policy
 
 Edit the non-secret variables in `wrangler.jsonc`:
 
 ```jsonc
 "vars": {
-  "ALLOWED_REPOSITORIES": "XeonFX/Peerly,XeonFX/HeyHubs",
-  "BRANCH_PREFIX": "chatgpt/",
+  "BRANCH_WRITE_POLICY": "unrestricted",
+  "WRITABLE_BRANCH_PREFIXES": "agent/",
+  "PROTECTED_BRANCHES": "main,master,develop,development,production,release",
   "PLAN_TTL_MINUTES": "30",
   "MAX_PLAN_FILES": "12",
   "MAX_PLAN_BYTES": "524288",
@@ -204,6 +218,33 @@ Edit the non-secret variables in `wrangler.jsonc`:
   "ALLOWED_WORKFLOWS": "agent-validation.yml"
 }
 ```
+
+### Branch write policy
+
+The branch policy is vendor-neutral and is returned by `GET /v1/capabilities`.
+
+| Variable | Default | Meaning |
+|---|---:|---|
+| `BRANCH_WRITE_POLICY` | `prefixed` | `prefixed` requires one of the configured prefixes; `unrestricted` permits any safe branch name except protected and actual default branches |
+| `WRITABLE_BRANCH_PREFIXES` | `agent/` | Comma-separated prefixes accepted in `prefixed` mode; the first prefix is also used for automatically generated names in either mode |
+| `PROTECTED_BRANCHES` | `main,master` | Comma-separated branch names that the gateway will never create, update or delete |
+
+Recommended modes:
+
+```jsonc
+// Safest shared deployment: every client uses a neutral namespace.
+"BRANCH_WRITE_POLICY": "prefixed",
+"WRITABLE_BRANCH_PREFIXES": "agent/,automation/"
+```
+
+```jsonc
+// Flexible personal deployment: clients may choose feature/*, fix/*, dependabot-like
+// names, and so on, while protected and actual default branches remain blocked.
+"BRANCH_WRITE_POLICY": "unrestricted",
+"WRITABLE_BRANCH_PREFIXES": "agent/"
+```
+
+`BRANCH_PREFIX` is retained only as a deprecated compatibility fallback. New deployments should use `WRITABLE_BRANCH_PREFIXES`.
 
 ### Feature flags
 
@@ -246,9 +287,13 @@ Public health endpoint:
 curl http://localhost:8787/health
 ```
 
-Authenticated repository list:
+Authenticated capability discovery and dynamic installation repository list:
 
 ```bash
+curl \
+  -H "Authorization: Bearer YOUR_ACTION_API_KEY" \
+  http://localhost:8787/v1/capabilities
+
 curl \
   -H "Authorization: Bearer YOUR_ACTION_API_KEY" \
   http://localhost:8787/v1/repositories
@@ -306,7 +351,11 @@ Adapt the commands to the repository. For a .NET repository, for example:
 
 Keep workflow permissions minimal. Do not expose production secrets to validation jobs triggered for agent-created branches unless absolutely necessary.
 
-## 9. Configure the Custom GPT Action
+## 9. Connect a client
+
+Any HTTP client can use the gateway with `Authorization: Bearer <ACTION_API_KEY>`. Clients should call `GET /v1/capabilities` before write operations instead of assuming branch names or enabled features. Repository names are returned only by authenticated `GET /v1/repositories`, not by the capabilities response.
+
+### ChatGPT Custom Action
 
 1. Open the GPT builder.
 2. Create or edit your private Custom GPT.
@@ -370,7 +419,7 @@ curl -X POST "$BASE_URL/v1/change-plans/PLAN_ID/apply" \
   -H "Content-Type: application/json" \
   -d '{
     "expectedBaseSha": "SHA_FROM_PREVIEW",
-    "confirmation": "APPLY XeonFX/Peerly chatgpt/fix-stabilize-attachments-20260722-abc123"
+    "confirmation": "APPLY XeonFX/Peerly agent/fix-stabilize-attachments-20260722-abc123"
   }'
 ```
 
@@ -381,9 +430,10 @@ The Worker verifies that:
 - the base SHA is unchanged;
 - the target branch does not already exist;
 - all paths still satisfy policy;
-- the branch uses the configured prefix.
+- the branch satisfies the effective `prefixed` or `unrestricted` policy;
+- the branch is not protected and is not the repository default branch.
 
-It then creates blobs, one tree and one commit. For a new branch it creates a branch ref; for a follow-up commit it advances an existing `chatgpt/` branch without force-pushing.
+It then creates blobs, one tree and one commit. For a new branch it creates a branch ref; for a follow-up commit it advances an existing writable branch without force-pushing.
 
 ### Add a follow-up commit to an existing PR branch
 
@@ -391,8 +441,8 @@ Create another change plan with `baseBranch` and `proposedBranch` set to the sam
 
 ```json
 {
-  "baseBranch": "chatgpt/fix-attachment-sync",
-  "proposedBranch": "chatgpt/fix-attachment-sync"
+  "baseBranch": "feature/fix-attachment-sync",
+  "proposedBranch": "feature/fix-attachment-sync"
 }
 ```
 
@@ -427,6 +477,7 @@ The complete Custom Action schema is in `openapi.action.json` and is served dyna
 Main route groups:
 
 ```text
+GET       /v1/capabilities
 GET/PATCH /v1/repos/{owner}/{repository}
 GET       /v1/repos/{owner}/{repository}/contents
 GET       /v1/repos/{owner}/{repository}/tree
@@ -447,13 +498,11 @@ GET/PUT/DELETE /v1/repos/{owner}/{repository}/collaborators
 
 ## Security model
 
-### Repository allowlist
-
-Every repository route calls the server-side allowlist. A model cannot access a repository just by changing action arguments.
-
 ### GitHub App installation scope
 
-Install the app only on selected repositories. The GitHub App installation scope is a second independent boundary in addition to `ALLOWED_REPOSITORIES`.
+The GitHub App installation is the authoritative repository access boundary. Install it with **Only select repositories**. `GET /v1/repositories` discovers those repositories from GitHub, and every repository request verifies that the requested repository belongs to the resolved installation.
+
+Add or remove repository access in **GitHub → Settings → Applications → Installed GitHub Apps → Configure**. The gateway picks up the change without a code change, redeploy, or repository-name secret.
 
 ### No long-lived GitHub personal token
 
@@ -461,11 +510,11 @@ The Worker signs a short-lived GitHub App JWT, exchanges it for an installation 
 
 ### No arbitrary shell
 
-The Action can dispatch only workflows named in `ALLOWED_WORKFLOWS`. The workflow file defines the actual commands.
+The gateway can dispatch only workflows named in `ALLOWED_WORKFLOWS`. The workflow file defines the actual commands.
 
 ### Protected code-writing flow
 
-The action cannot directly submit a generic file-write request. Code changes must pass through preview and apply.
+The client cannot directly submit a generic file-write request. Code changes must pass through preview and apply. The gateway blocks its configured protected branches and dynamically rejects the repository's actual default branch, even when unrestricted naming mode is enabled.
 
 ### Sensitive paths
 
@@ -507,7 +556,7 @@ The Custom GPT API key and Cloudflare `ACTION_API_KEY` secret do not match, or a
 
 ### `404 Not Found` from GitHub installation lookup
 
-The GitHub App is not installed on that repository, or the repository name in `ALLOWED_REPOSITORIES` is wrong.
+The GitHub App is not installed for that repository, the repository is not selected in the installation, or `GITHUB_INSTALLATION_ID` points to a different installation.
 
 ### `403 Resource not accessible by integration`
 
@@ -550,7 +599,7 @@ Set `ENABLE_ADMIN_OPERATIONS=true`, grant the GitHub App **Administration** perm
 ## Production checklist
 
 - [ ] GitHub App installed only on intended repositories
-- [ ] Exact `ALLOWED_REPOSITORIES`
+- [ ] GitHub App uses **Only select repositories** and contains exactly the intended repositories
 - [ ] Long random `ACTION_API_KEY`
 - [ ] Worker secrets configured
 - [ ] D1 migrations applied remotely
@@ -559,9 +608,14 @@ Set `ENABLE_ADMIN_OPERATIONS=true`, grant the GitHub App **Administration** perm
 - [ ] `ENABLE_ADMIN_OPERATIONS=false` initially
 - [ ] Minimal GitHub App permissions
 - [ ] Validation workflows have minimal permissions
-- [ ] Custom GPT is private
+- [ ] Client integration is private while testing
 - [ ] Preview/apply workflow tested on a disposable branch
 - [ ] Branch protection requires CI before merge
+- [ ] `GET /v1/capabilities` returns the expected branch policy
+
+## Detailed deployment guide
+
+See [`docs/CLOUDFLARE_DEPLOYMENT.md`](docs/CLOUDFLARE_DEPLOYMENT.md) for a dashboard-oriented, step-by-step deployment checklist.
 
 ## License
 

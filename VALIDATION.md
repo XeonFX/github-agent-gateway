@@ -1,21 +1,24 @@
 # Validation report
 
-Validation performed while generating this package:
+Validation performed for version 1.2.0:
 
-- TypeScript source parsed and type-checked against local interface stubs for Hono, Zod, Cloudflare D1 and Vitest.
-- All 55 implemented HTTP operations match the operations in `openapi.action.json`.
-- Every OpenAPI path placeholder has a corresponding required path parameter.
-- All OpenAPI `operationId` values are unique.
-- `package.json`, `tsconfig.json`, `wrangler.jsonc` and `openapi.action.json` parse successfully.
-- The D1 migration executes successfully in an empty SQLite database.
-- Both GitHub Actions workflow files parse successfully as YAML.
-- No private key blocks, GitHub token patterns, TODOs or FIXMEs were found in the generated source.
+- TypeScript syntax transpilation passed for every file under `src/` and `test/`.
+- The GitHub installation discovery client and its new tests passed a strict TypeScript check using local interface stubs for Cloudflare, Node and Vitest types.
+- Runtime smoke checks passed for:
+  - listing repositories from a fixed installation;
+  - rejecting a repository routed through a different fixed installation;
+  - converting a missing GitHub App installation lookup into `repository_not_accessible` instead of falling back to public repository access.
+- The Vitest suite now covers fixed-installation discovery, all-installation discovery, selected-repository membership, fixed-installation mismatch and missing-installation rejection.
+- `openapi.action.json` contains 56 operations with 56 unique `operationId` values.
+- `package.json` and `openapi.action.json` parse successfully.
+- No D1 migration is required for this change.
+- The patch was generated from the current `feat/branchprotection` tree and verified with `git apply --check` against a clean copy of that baseline.
 
 ## Check not completed in the generation environment
 
-The npm package registry was unreachable from the generation container: repeated `npm install` attempts timed out. Therefore the real dependency-backed `npm run check` command and Vitest suite were not executed here.
+The npm package registry was unreachable from the generation container: `npm install` timed out. Therefore the real dependency-backed `npm run check` command and Vitest suite were not executed here.
 
-Run these commands after downloading:
+Run these commands after applying the patch:
 
 ```bash
 npm install

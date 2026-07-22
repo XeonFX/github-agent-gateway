@@ -3,25 +3,33 @@
   "name": "github-agent-gateway",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-22",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+
   "observability": {
     "enabled": true
   },
+
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "github-agent-gateway",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "3dc3e214-28a8-423a-971f-36afc14760d6",
       "migrations_dir": "migrations"
     }
   ],
+
   "vars": {
-    "ALLOWED_REPOSITORIES": "XeonFX/Peerly,XeonFX/HeyHubs",
-    "BRANCH_PREFIX": "chatgpt/",
+    "BRANCH_WRITE_POLICY": "unrestricted",
+    "WRITABLE_BRANCH_PREFIXES": "agent/",
+    "PROTECTED_BRANCHES": "main,master,develop,development,production,release",
+
     "PLAN_TTL_MINUTES": "30",
     "MAX_PLAN_FILES": "12",
     "MAX_PLAN_BYTES": "524288",
     "MAX_DIFF_BYTES": "196608",
+
     "ENABLE_MERGE": "false",
     "ENABLE_DESTRUCTIVE_OPERATIONS": "false",
     "ENABLE_ADMIN_OPERATIONS": "false",

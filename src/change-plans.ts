@@ -3,10 +3,10 @@ import { z } from "zod";
 import type { Env } from "./types";
 import { GitHubClient } from "./github/client";
 import { AppError, isNotFound } from "./errors";
-import { assertAgentBranch, assertRepositoryAllowed, assertSafePath } from "./policy";
+import { assertNotDefaultBranch, assertSafePath, assertWritableBranch } from "./policy";
 import { addMinutesIso, bytesFromContent, decodeBase64, encodeBase64, nowIso, slugify, truncateUtf8, tryDecodeText } from "./utils";
 import { insertChangePlan, getChangePlan, markPlanApplied, markPlanFailed, type StoredChangePlan } from "./db";
-import { branchPrefix, planLimits } from "./config";
+import { generatedBranchPrefix, planLimits } from "./config";
 
 export const fileChangeSchema = z.object({
   path: z.string().min(1).max(1024),
@@ -14,7 +14,7 @@ export const fileChangeSchema = z.object({
   content: z.string().optional(),
   contentEncoding: z.enum(["utf-8", "base64"]).default("utf-8"),
   mode: z.enum(["100644", "100755", "120000"]).optional()
-}).superRefine((value: { operation: "create" | "update" | "delete"; content?: string }, ctx: { addIssue(issue: { code: "custom"; message: string }): void }) => {
+}).superRefine((value, ctx) => {
   if (value.operation !== "delete" && value.content === undefined) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "content is required for create and update" });
   }
@@ -61,7 +61,7 @@ function encodeRef(ref: string): string {
 
 function generatedBranch(env: Env, message: string): string {
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  return `${branchPrefix(env)}${slugify(message)}-${date}-${crypto.randomUUID().slice(0, 6)}`;
+  return `${generatedBranchPrefix(env)}${slugify(message)}-${date}-${crypto.randomUUID().slice(0, 6)}`;
 }
 
 async function readFileAtRef(client: GitHubClient, owner: string, repository: string, path: string, ref: string): Promise<GitHubContentFile | undefined> {
@@ -90,7 +90,6 @@ async function readFileAtRef(client: GitHubClient, owner: string, repository: st
 }
 
 export async function createChangePlan(env: Env, input: CreateChangePlanInput): Promise<StoredChangePlan> {
-  assertRepositoryAllowed(env, input.owner, input.repository);
   const limits = planLimits(env);
   if (input.files.length > limits.maxFiles) {
     throw new AppError(`A change plan may contain at most ${limits.maxFiles} files`, 413, "plan_too_large");
@@ -108,8 +107,14 @@ export async function createChangePlan(env: Env, input: CreateChangePlanInput): 
   }
 
   const proposedBranch = input.proposedBranch || generatedBranch(env, input.titleHint || input.commitMessage);
-  assertAgentBranch(env, proposedBranch);
+  assertWritableBranch(env, proposedBranch);
   const client = new GitHubClient(env);
+  const repository = await client.request<{ default_branch: string | null }>(
+    "GET",
+    `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repository)}`,
+    { owner: input.owner, repository: input.repository }
+  );
+  assertNotDefaultBranch(proposedBranch, repository.default_branch);
   const baseRef = await client.request<GitRefResponse>(
     "GET",
     `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repository)}/git/ref/heads/${encodeRef(input.baseBranch)}`,
@@ -192,6 +197,14 @@ export async function applyChangePlan(env: Env, planId: string, expectedBaseSha:
 
   const client = new GitHubClient(env);
   try {
+    const repository = await client.request<{ default_branch: string | null }>(
+      "GET",
+      `/repos/${encodeURIComponent(plan.owner)}/${encodeURIComponent(plan.repository)}`,
+      { owner: plan.owner, repository: plan.repository }
+    );
+    assertWritableBranch(env, plan.proposedBranch);
+    assertNotDefaultBranch(plan.proposedBranch, repository.default_branch);
+
     const currentBase = await client.request<GitRefResponse>(
       "GET",
       `/repos/${encodeURIComponent(plan.owner)}/${encodeURIComponent(plan.repository)}/git/ref/heads/${encodeRef(plan.baseBranch)}`,
@@ -206,7 +219,7 @@ export async function applyChangePlan(env: Env, planId: string, expectedBaseSha:
 
     const updateExistingBranch = plan.proposedBranch === plan.baseBranch;
     if (updateExistingBranch) {
-      assertAgentBranch(env, plan.baseBranch);
+      assertWritableBranch(env, plan.baseBranch);
     } else {
       try {
         await client.request(
