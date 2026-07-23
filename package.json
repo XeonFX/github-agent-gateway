@@ -27,7 +27,8 @@
     "check": "npm run typecheck && npm test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
   },
   "dependencies": {
     "diff": "^9.0.0",
