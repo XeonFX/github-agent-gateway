@@ -6,9 +6,7 @@ export function constantTimeEqual(left: string, right: string): boolean {
   const b = new TextEncoder().encode(right);
   const length = Math.max(a.length, b.length);
   let diff = a.length ^ b.length;
-  for (let i = 0; i < length; i += 1) {
-    diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
-  }
+  for (let i = 0; i < length; i += 1) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
   return diff === 0;
 }
 
@@ -26,41 +24,27 @@ export function encodeBase64(input: Uint8Array): string {
 }
 
 export function bytesFromContent(content: string, encoding: "utf-8" | "base64"): Uint8Array {
-  if (encoding === "base64") return decodeBase64(content);
-  return new TextEncoder().encode(content);
+  return encoding === "base64" ? decodeBase64(content) : new TextEncoder().encode(content);
 }
 
 export function tryDecodeText(bytes: Uint8Array): string | undefined {
   if (bytes.includes(0)) return undefined;
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return undefined;
-  }
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return undefined; }
 }
 
 export function safeJsonParse<T>(value: string, fallback: T): T {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
+  try { return JSON.parse(value) as T; } catch { return fallback; }
 }
 
-export function nowIso(): string {
-  return new Date().toISOString();
+export function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }
 
-export function addMinutesIso(minutes: number): string {
-  return new Date(Date.now() + minutes * 60_000).toISOString();
-}
+export function nowIso(): string { return new Date().toISOString(); }
+export function addMinutesIso(minutes: number): string { return new Date(Date.now() + minutes * 60_000).toISOString(); }
 
 export function slugify(value: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 42);
+  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 42);
   return slug || "change";
 }
 
@@ -71,17 +55,14 @@ export function assertExactConfirmation(actual: string | undefined, expected: st
 }
 
 export function assertStringRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new AppError("Expected a JSON object");
-  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new AppError("Expected a JSON object");
   return value as Record<string, unknown>;
 }
 
 export function truncateUtf8(value: string, maxBytes: number): { value: string; truncated: boolean } {
   const bytes = new TextEncoder().encode(value);
   if (bytes.byteLength <= maxBytes) return { value, truncated: false };
-  const sliced = bytes.slice(0, maxBytes);
-  return { value: new TextDecoder().decode(sliced) + "\n... diff truncated ...\n", truncated: true };
+  return { value: new TextDecoder().decode(bytes.slice(0, Math.max(0, maxBytes))) + "\n... truncated ...\n", truncated: true };
 }
 
 export function getIdempotencyKey(headers: Headers): string | undefined {
