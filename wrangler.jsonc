@@ -3,14 +3,8 @@
   "name": "github-agent-gateway",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-22",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
-
-  "observability": {
-    "enabled": true
-  },
-
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
   "d1_databases": [
     {
       "binding": "DB",
@@ -19,17 +13,18 @@
       "migrations_dir": "migrations"
     }
   ],
-
   "vars": {
     "BRANCH_WRITE_POLICY": "unrestricted",
     "WRITABLE_BRANCH_PREFIXES": "agent/",
     "PROTECTED_BRANCHES": "main,master,develop,development,production,release",
-
     "PLAN_TTL_MINUTES": "30",
     "MAX_PLAN_FILES": "12",
     "MAX_PLAN_BYTES": "524288",
     "MAX_DIFF_BYTES": "196608",
-
+    "MAX_ACTION_RESPONSE_BYTES": "262144",
+    "MAX_UPSTREAM_RESPONSE_BYTES": "8388608",
+    "DEFAULT_READ_PAGE_SIZE": "100",
+    "MAX_PATCH_BYTES": "131072",
     "ENABLE_MERGE": "false",
     "ENABLE_DESTRUCTIVE_OPERATIONS": "false",
     "ENABLE_ADMIN_OPERATIONS": "false",

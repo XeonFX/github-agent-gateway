@@ -62,7 +62,13 @@ export function assertStringRecord(value: unknown): Record<string, unknown> {
 export function truncateUtf8(value: string, maxBytes: number): { value: string; truncated: boolean } {
   const bytes = new TextEncoder().encode(value);
   if (bytes.byteLength <= maxBytes) return { value, truncated: false };
-  return { value: new TextDecoder().decode(bytes.slice(0, Math.max(0, maxBytes))) + "\n... truncated ...\n", truncated: true };
+  const marker = "\n... truncated ...\n";
+  const markerBytes = new TextEncoder().encode(marker).byteLength;
+  const contentBudget = Math.max(0, maxBytes - markerBytes);
+  return {
+    value: new TextDecoder().decode(bytes.slice(0, contentBudget)) + marker,
+    truncated: true
+  };
 }
 
 export function getIdempotencyKey(headers: Headers): string | undefined {
