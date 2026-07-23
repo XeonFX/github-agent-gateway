@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 
 export const repoParamsSchema = z.object({ owner: z.string().min(1), repository: z.string().min(1) });
 export const issueNumberSchema = z.coerce.number().int().positive();

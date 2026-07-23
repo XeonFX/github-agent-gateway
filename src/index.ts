@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { z, ZodError } from "zod";
+import { z, ZodError } from "zod/v4";
 
 import type { AppVariables, Env } from "./types";
 import { AppError, GitHubApiError } from "./errors";
