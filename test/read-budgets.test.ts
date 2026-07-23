@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import openapiBase from "../openapi.action.json";
 import { responseLimits } from "../src/config";
-import { AppError } from "../src/errors";
 import { createChatGptOpenApiDocument, listOperationIds, withServer, type OpenApiDocument } from "../src/openapi";
 import { assertResponseWithinLimit, readBoundedText } from "../src/response-limits";
 import type { Env } from "../src/types";
@@ -25,7 +24,7 @@ describe("response limits", () => {
 
   it("rejects an announced upstream response before reading it", async () => {
     const response = new Response("small", { headers: { "content-length": "70000" } });
-    await expect(readBoundedText(response, 65536)).rejects.toMatchObject<AppError>({
+    await expect(readBoundedText(response, 65536)).rejects.toMatchObject({
       status: 413,
       code: "upstream_response_too_large"
     });
@@ -33,7 +32,7 @@ describe("response limits", () => {
 
   it("rejects an upstream response whose actual body exceeds the limit", async () => {
     const response = new Response("x".repeat(70000));
-    await expect(readBoundedText(response, 65536)).rejects.toMatchObject<AppError>({
+    await expect(readBoundedText(response, 65536)).rejects.toMatchObject({
       status: 413,
       code: "upstream_response_too_large"
     });
@@ -41,7 +40,7 @@ describe("response limits", () => {
 
   it("rejects an oversized action response with recovery details", async () => {
     const response = new Response("x".repeat(70000));
-    await expect(assertResponseWithinLimit(response, 65536)).rejects.toMatchObject<AppError>({
+    await expect(assertResponseWithinLimit(response, 65536)).rejects.toMatchObject({
       status: 413,
       code: "response_too_large"
     });
