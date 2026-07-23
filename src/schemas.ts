@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 
 export const repoParamsSchema = z.object({ owner: z.string().min(1), repository: z.string().min(1) });
 export const issueNumberSchema = z.coerce.number().int().positive();
@@ -19,7 +19,7 @@ export const createPullSchema = z.object({
   body: z.string().optional(),
   draft: z.boolean().default(true),
   maintainerCanModify: z.boolean().default(true),
-  changePlanId: z.string().uuid().optional()
+  changePlanId: z.uuid().optional()
 });
 
 export const updatePullSchema = z.object({
@@ -85,7 +85,7 @@ export const updateLabelSchema = z.object({
 
 export const dispatchWorkflowSchema = z.object({
   ref: z.string().min(1),
-  inputs: z.record(z.union([z.string(), z.boolean(), z.number()])).default({})
+  inputs: z.record(z.string(), z.union([z.string(), z.boolean(), z.number()])).default({})
 });
 
 export const createReleaseSchema = z.object({
@@ -106,11 +106,11 @@ export const createTagSchema = z.object({
   message: z.string().optional(),
   type: z.enum(["commit", "tree", "blob"]).default("commit"),
   annotated: z.boolean().default(false),
-  tagger: z.object({ name: z.string(), email: z.string().email(), date: z.string().datetime().optional() }).optional()
+  tagger: z.object({ name: z.string(), email: z.email(), date: z.iso.datetime().optional() }).optional()
 });
 
 export const repositorySettingsSchema = z.object({
-  settings: z.record(z.unknown()),
+  settings: z.record(z.string(), z.unknown()),
   confirmation: z.string().min(1)
 });
 
@@ -120,6 +120,6 @@ export const collaboratorSchema = z.object({
 });
 
 export const branchProtectionSchema = z.object({
-  protection: z.record(z.unknown()),
+  protection: z.record(z.string(), z.unknown()),
   confirmation: z.string().min(1)
 });

@@ -24,7 +24,6 @@ export function requireSecrets(env: Env): void {
     ["GITHUB_APP_ID", env.GITHUB_APP_ID],
     ["GITHUB_PRIVATE_KEY_BASE64", env.GITHUB_PRIVATE_KEY_BASE64]
   ].filter(([, value]) => !value).map(([name]) => name);
-
   if (missing.length > 0) {
     throw new AppError(`Missing required configuration: ${missing.join(", ")}`, 500, "configuration_error");
   }
@@ -35,18 +34,7 @@ function csvValues(value: string): string[] {
 }
 
 function assertValidBranchPrefix(prefix: string): void {
-  if (
-    !prefix ||
-    prefix.length > 200 ||
-    prefix.startsWith("-") ||
-    prefix.endsWith(".") ||
-    prefix.includes("..") ||
-    prefix.includes("@{") ||
-    prefix.includes("\\") ||
-    /\s|[~^:?*\[]/.test(prefix) ||
-    prefix.includes("//") ||
-    prefix.includes("/.")
-  ) {
+  if (!prefix || prefix.length > 200 || prefix.startsWith("-") || prefix.endsWith(".") || prefix.includes("..") || prefix.includes("@{") || prefix.includes("\\") || /\s|[~^:?*\[]/.test(prefix) || prefix.includes("//") || prefix.includes("/.")) {
     throw new AppError(`Invalid writable branch prefix: ${prefix}`, 500, "configuration_error");
   }
 }
@@ -54,22 +42,15 @@ function assertValidBranchPrefix(prefix: string): void {
 export function branchWritePolicy(env: Env): BranchWritePolicy {
   const policy = (env.BRANCH_WRITE_POLICY?.trim().toLowerCase() || "prefixed") as BranchWritePolicy;
   if (policy !== "prefixed" && policy !== "unrestricted") {
-    throw new AppError(
-      "BRANCH_WRITE_POLICY must be either prefixed or unrestricted",
-      500,
-      "configuration_error"
-    );
+    throw new AppError("BRANCH_WRITE_POLICY must be either prefixed or unrestricted", 500, "configuration_error");
   }
   return policy;
 }
 
 export function writableBranchPrefixes(env: Env): string[] {
-  // BRANCH_PREFIX is retained as a backwards-compatible fallback for existing deployments.
   const raw = env.WRITABLE_BRANCH_PREFIXES?.trim() || env.BRANCH_PREFIX?.trim() || DEFAULT_WRITABLE_BRANCH_PREFIX;
   const prefixes = csvValues(raw);
-  if (prefixes.length === 0) {
-    throw new AppError("At least one writable branch prefix is required", 500, "configuration_error");
-  }
+  if (prefixes.length === 0) throw new AppError("At least one writable branch prefix is required", 500, "configuration_error");
   for (const prefix of prefixes) assertValidBranchPrefix(prefix);
   return prefixes;
 }
@@ -79,10 +60,7 @@ export function generatedBranchPrefix(env: Env): string {
 }
 
 export function protectedBranches(env: Env): Set<string> {
-  return new Set(
-    csvValues(env.PROTECTED_BRANCHES?.trim() || DEFAULT_PROTECTED_BRANCHES)
-      .map((branch) => branch.toLowerCase())
-  );
+  return new Set(csvValues(env.PROTECTED_BRANCHES?.trim() || DEFAULT_PROTECTED_BRANCHES).map((branch) => branch.toLowerCase()));
 }
 
 /** @deprecated Use generatedBranchPrefix or writableBranchPrefixes. */
@@ -99,11 +77,15 @@ export function planLimits(env: Env) {
   };
 }
 
+export function responseLimits(env: Env) {
+  return {
+    maxActionResponseBytes: envInt(env.MAX_ACTION_RESPONSE_BYTES, 256 * 1024, 16 * 1024, 2 * 1024 * 1024),
+    maxUpstreamResponseBytes: envInt(env.MAX_UPSTREAM_RESPONSE_BYTES, 8 * 1024 * 1024, 64 * 1024, 25 * 1024 * 1024),
+    defaultReadPageSize: envInt(env.DEFAULT_READ_PAGE_SIZE, 100, 1, 1000),
+    maxPatchBytes: envInt(env.MAX_PATCH_BYTES, 128 * 1024, 1024, 1024 * 1024)
+  };
+}
+
 export function allowedWorkflows(env: Env): Set<string> {
-  return new Set(
-    (env.ALLOWED_WORKFLOWS || "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
-  );
+  return new Set((env.ALLOWED_WORKFLOWS || "").split(",").map((item) => item.trim()).filter(Boolean));
 }

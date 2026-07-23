@@ -13,6 +13,10 @@ export interface Env {
   MAX_PLAN_FILES?: string;
   MAX_PLAN_BYTES?: string;
   MAX_DIFF_BYTES?: string;
+  MAX_ACTION_RESPONSE_BYTES?: string;
+  MAX_UPSTREAM_RESPONSE_BYTES?: string;
+  DEFAULT_READ_PAGE_SIZE?: string;
+  MAX_PATCH_BYTES?: string;
   ENABLE_MERGE?: string;
   ENABLE_DESTRUCTIVE_OPERATIONS?: string;
   ENABLE_ADMIN_OPERATIONS?: string;
@@ -39,6 +43,7 @@ export interface GitHubRequestOptions {
   auth?: "app" | "installation";
   redirect?: RequestRedirect;
   accept?: string;
+  maxResponseBytes?: number;
 }
 
 export interface GitHubErrorBody {
